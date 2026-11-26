@@ -89,6 +89,7 @@ textarea{background:var(--bg);color:var(--ink);border:1px solid var(--line);bord
     <label class="f">Grosor del círculo<input type="range" id="rw" min="4" max="16"></label>
   </div>
   <label class="opt"><input type="checkbox" id="ring"> Mostrar círculo de progreso</label>
+  <label class="opt"><input type="checkbox" id="wake"> Mantener la pantalla encendida mientras corre el temporizador</label>
   <label class="opt"><input type="checkbox" id="snd"> Sonido de aviso</label>
   <label class="f" style="margin-top:8px">Volumen<input type="range" id="vol" min="0" max="1" step="0.05"></label>
   <div id="cloud" hidden>
@@ -148,7 +149,7 @@ var BASE=[
  {id:'u90',n:'90/20',f:90,s:20,l:30,c:2}
 ];
 function load(){try{var d=JSON.parse(localStorage.getItem(KEY));if(d&&d.subjects)return d}catch(e){}return {subjects:[],custom:[],method:'pomodoro',auto:true,sel:null}}
-var DEF_UI={c:{},ff:'sys',fs:16,r:14,rw:9,snd:true,vol:0.6,ring:true};
+var DEF_UI={c:{},ff:'sys',fs:16,r:14,rw:9,snd:true,vol:0.6,ring:true,wake:true};
 function norm(d){d.ui=Object.assign({},DEF_UI,d.ui||{});d.ui.c=d.ui.c||{};d.custom=d.custom||[];return d}
 var S=norm(load());
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}pushCloud()}
@@ -159,7 +160,7 @@ function all(){return BASE.concat(S.custom)}
 function meth(){return all().filter(function(x){return x.id===S.method})[0]||BASE[0]}
 
 /* ---------- Temporizador ---------- */
-var ph='focus',cyc=0,left=0,running=false,endAt=0,total=0,tm=null,actx=null;
+var ph='focus',cyc=0,left=0,running=false,endAt=0,total=0,tm=null,actx=null,wl=null;
 var NAMES={focus:'Estudio',short:'Descanso corto',long:'Descanso largo'};
 var COLORS={focus:'var(--focus)',short:'var(--short)',long:'var(--long)'};
 function dur(p){var m=meth();return (p==='focus'?m.f:p==='short'?m.s:m.l)*60000}
@@ -175,7 +176,14 @@ function paint(){
   for(var i=0;i<m.c;i++)d+='<i class="'+(i<cyc%m.c||(cyc>0&&cyc%m.c===0&&ph==='long')?'f':'')+'"></i>';
   $('dots').innerHTML=d;
   document.title=running?fmt(left)+' · '+NAMES[ph]:'Estudio: temporizador y temas';
+  if(running&&S.ui.wake)wakeOn();else wakeOff();
 }
+function wakeOn(){
+  if(wl||!navigator.wakeLock||document.visibilityState!=='visible')return;
+  navigator.wakeLock.request('screen').then(function(l){wl=l;l.addEventListener('release',function(){wl=null})}).catch(function(){});
+}
+function wakeOff(){if(wl){try{wl.release()}catch(e){}wl=null}}
+document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible'&&running&&S.ui.wake)wakeOn()});
 function beep(times){
   try{
     if(!S.ui.snd)throw 0;
@@ -387,7 +395,7 @@ function buildCfg(){
   var u=S.ui;
   $('presets').innerHTML='<button class="chip" data-p="auto">Automático</button>'+Object.keys(PRE).map(function(k){return '<button class="chip" data-p="'+k+'">'+PRE[k].n+'</button>'}).join('');
   $('colors').innerHTML=CK.map(function(p){return '<label class="f">'+p[1]+'<input type="color" data-c="'+p[0]+'" value="'+hexOf(p[0])+'"></label>'}).join('');
-  $('ff').value=u.ff;$('fs').value=String(u.fs);$('rad').value=u.r;$('rw').value=u.rw;$('snd').checked=u.snd;$('vol').value=u.vol;$('ring').checked=u.ring;
+  $('ff').value=u.ff;$('fs').value=String(u.fs);$('rad').value=u.r;$('rw').value=u.rw;$('snd').checked=u.snd;$('vol').value=u.vol;$('ring').checked=u.ring;$('wake').checked=u.wake!==false;$('wake').disabled=!navigator.wakeLock;
   $('auto').checked=!!S.auto;
 }
 $('theme').onclick=function(){var c=$('cfg');c.hidden=!c.hidden;this.setAttribute('aria-expanded',String(!c.hidden));if(!c.hidden)buildCfg()};
@@ -403,6 +411,7 @@ bind('rad','r',function(x){return +x.value});
 bind('rw','rw',function(x){return +x.value});
 bind('snd','snd',function(x){return x.checked},'change');
 bind('ring','ring',function(x){return x.checked},'change');
+bind('wake','wake',function(x){return x.checked},'change');
 bind('vol','vol',function(x){return +x.value});
 $('vol').addEventListener('change',function(){beep(1)});
 $('rst').onclick=function(){S.ui=norm({}).ui;save();applyUI();paint();buildCfg()};
