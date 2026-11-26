@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Estudio: temporizador y temas</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#2b4bd6">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <style>
 :root{--r:14px;--rw:9;--fs:16px;--ff:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--bg:#eef1f4;--card:#fff;--ink:#14202b;--mut:#5d6b78;--line:#d8dee5;--focus:#2b4bd6;--short:#1f8a5b;--long:#b9770e;--on:#fff;color-scheme:light dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#11151b;--card:#1a2029;--ink:#e8edf2;--mut:#98a5b2;--line:#2c3541;--focus:#7b93ff;--short:#4cc38a;--long:#e0a23c;--on:#11151b}}
@@ -383,6 +387,9 @@ function initCloud(){
 renderMethods();setPhase('focus');applyUI();buildCfg();render();initCloud();
 if(!SR)msg('Tu navegador no admite dictado por voz. Prueba con Chrome o Safari.');
 })();
+</script>
+<script>
+if('serviceWorker' in navigator&&location.protocol==='https:'){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})})}
 </script>
 </body>
 </html>
