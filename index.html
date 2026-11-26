@@ -69,6 +69,9 @@ input[type=range]{width:100%;accent-color:var(--focus)}
 #cfg .opt{justify-content:flex-start}
 .noring .ringwrap svg{display:none}
 .noring .ringwrap{height:96px}
+textarea{background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:calc(var(--r)*.7);padding:9px;font:inherit}
+#shbox{border:1px dashed var(--line);border-radius:calc(var(--r)*.7);padding:12px;margin-top:10px}
+#shbox p{margin:0 0 8px}
 </style>
 </head>
 <body>
@@ -128,6 +131,7 @@ input[type=range]{width:100%;accent-color:var(--focus)}
   <div class="chips" id="subjects"></div>
   <div id="subjectAdd"></div>
   <div id="detail"></div>
+  <div id="shbox" hidden></div>
   <div id="micmsg" aria-live="polite"></div>
 </section>
 </main>
@@ -246,13 +250,13 @@ function row(k,ph){
 function render(){
   if(!cur())S.sel=S.subjects.length?S.subjects[0].id:null;
   $('subjects').innerHTML=S.subjects.map(function(s){return '<button class="chip'+(s.id===S.sel?' on':'')+'" data-a="sel" data-id="'+s.id+'">'+esc(s.name)+'</button>'}).join('');
-  $('subjectAdd').innerHTML=row('subject','Nueva materia');
+  $('subjectAdd').innerHTML=row('subject','Nueva materia')+'<div class="row"><button data-a="import">Importar materia compartida</button></div>';
   var s=cur(),h='';
   if(!s){h='<p class="empty">Aún no tienes materias. Escribe o dicta el nombre de una arriba.</p>'}
   else{
     var tot=0,dn=0;
     s.topics.forEach(function(t){tot++;if(t.done)dn++;t.subs.forEach(function(u){tot++;if(u.done)dn++})});
-    h+='<div class="head"><strong>'+esc(s.name)+'</strong><span class="prog">'+dn+' de '+tot+' hechos <button class="del" data-a="delsubject" aria-label="Borrar materia">Borrar materia</button></span></div>';
+    h+='<div class="head"><strong>'+esc(s.name)+'</strong><span class="prog">'+dn+' de '+tot+' hechos <button data-a="share">Compartir</button> <button class="del" data-a="delsubject" aria-label="Borrar materia">Borrar materia</button></span></div>';
     h+=row('topic','Nuevo tema de '+esc(s.name));
     if(!s.topics.length)h+='<p class="empty">Añade el primer tema. Con la voz puedes decir uno tras otro.</p>';
     s.topics.forEach(function(t){
@@ -284,10 +288,54 @@ document.addEventListener('click',function(e){
   if(a==='sel'){S.sel=id;save();render()}
   else if(a==='add'){var i=inputFor(k);if(i&&add(k,i.value)){i=inputFor(k);i&&i.focus()}}
   else if(a==='mic'){micKey===k?stopMic():startMic(k)}
+  else if(a==='share'){shareSubject()}
+  else if(a==='import'){openImport()}
+  else if(a==='doimport'){doImport()}
+  else if(a==='copy'){copyOut()}
+  else if(a==='closesh'){$('shbox').hidden=true}
   else if(a==='delsubject'){var c=cur();if(c&&confirm('¿Borrar la materia '+c.name+' con todos sus temas?')){S.subjects=S.subjects.filter(function(x){return x.id!==c.id});S.sel=null;save();render()}}
   else if(a==='deltopic'){var c2=cur();c2.topics=c2.topics.filter(function(x){return x.id!==id});save();render()}
   else if(a==='delsub'){cur().topics.forEach(function(x){x.subs=x.subs.filter(function(u){return u.id!==id})});save();render()}
 });
+
+/* ---------- Compartir materias ---------- */
+var AL='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function mkCode(){var c='';for(var i=0;i<8;i++)c+=AL.charAt(Math.floor(Math.random()*AL.length));return c}
+function box(h){var b=$('shbox');b.innerHTML=h+'<div class="row"><button data-a="closesh">Cerrar</button></div>';b.hidden=false}
+function snapOf(s){return {name:s.name,topics:s.topics.map(function(t){return {name:t.name,subs:t.subs.map(function(u){return u.name})}})}}
+function shareSubject(){
+  var s=cur();if(!s)return;var o=snapOf(s),txt=JSON.stringify(o);
+  function asText(note){box('<p>'+note+'</p><textarea id="shout" readonly rows="5" style="width:100%">'+esc(txt)+'</textarea><div class="row"><button data-a="copy">Copiar texto</button></div>')}
+  if(!CX){asText('Para compartir con un código corto, entra con Google en Personalizar. Mientras tanto, copia este texto y envíaselo a tu amigo: él lo pega en «Importar materia compartida».');return}
+  box('<p>Creando código…</p>');
+  var tries=0;
+  (function go(){
+    var code=mkCode();
+    CX.put(code,o).then(function(){
+      box('<p>Código de <strong>'+esc(s.name)+'</strong>:</p><p id="shout" style="font-size:1.6em;letter-spacing:.12em;font-weight:700">'+code+'</p><p class="prog">Pásaselo a tu amigo. Él abre «Importar materia compartida», lo escribe y recibe una copia. Los cambios que hagas después no se reflejan en su copia.</p><div class="row"><button data-a="copy">Copiar código</button></div>');
+    }).catch(function(){if(++tries<3)go();else asText('No se pudo crear el código. Copia este texto y envíaselo a tu amigo.')});
+  })();
+}
+function copyOut(){
+  var e=$('shout');if(!e)return;var t=e.value!==undefined?e.value:e.textContent;
+  try{navigator.clipboard.writeText(t).then(function(){msg('Copiado.')})}catch(x){if(e.select){e.select();document.execCommand('copy');msg('Copiado.')}}
+}
+function openImport(){
+  box('<label class="f">Código o texto compartido<input type="text" id="impin" placeholder="Código, o pega aquí el texto" autocomplete="off"></label><div class="row"><button data-a="doimport">Importar</button></div><p id="impmsg" class="prog"></p>');
+  $('impin').focus();
+}
+function addShared(o){
+  if(!o||typeof o.name!=='string'||!Array.isArray(o.topics))return false;
+  var s={id:uid(),name:o.name.slice(0,80),topics:o.topics.slice(0,200).map(function(t){return {id:uid(),name:String(t.name).slice(0,120),done:false,subs:(t.subs||[]).slice(0,200).map(function(u){return {id:uid(),name:String(u).slice(0,120),done:false}})}})};
+  S.subjects.push(s);S.sel=s.id;save();render();return true;
+}
+function doImport(){
+  var v=$('impin').value.trim(),m=$('impmsg');if(!v)return;
+  if(v.charAt(0)==='{'){try{if(addShared(JSON.parse(v))){$('shbox').hidden=true;return}}catch(e){}m.textContent='El texto no es válido.';return}
+  if(!CX){m.textContent='Para usar un código, entra con Google en Personalizar.';return}
+  m.textContent='Buscando…';
+  CX.get(v.toUpperCase().replace(/[^A-Z0-9]/g,'')).then(function(o){if(o&&addShared(o))$('shbox').hidden=true;else m.textContent='No existe ese código.'}).catch(function(){m.textContent='No se pudo leer el código.'});
+}
 
 /* ---------- Dictado por voz ---------- */
 var SR=window.SpeechRecognition||window.webkitSpeechRecognition,rec=null,micKey=null;
@@ -360,7 +408,7 @@ $('vol').addEventListener('change',function(){beep(1)});
 $('rst').onclick=function(){S.ui=norm({}).ui;save();applyUI();paint();buildCfg()};
 
 /* ---------- Sincronización con Firebase ---------- */
-var CL=null,ct=null,G='https://www.gstatic.com/firebasejs/10.12.2/';
+var CL=null,CX=null,ct=null,G='https://www.gstatic.com/firebasejs/10.12.2/';
 function cstat(t){$('cst').textContent=t}
 function pushCloud(){if(!CL)return;clearTimeout(ct);ct=setTimeout(CL,800)}
 function refreshAll(){applyUI();buildCfg();renderMethods();stopAll();render()}
@@ -373,11 +421,15 @@ function initCloud(){
     $('logout').onclick=function(){m[1].signOut(auth)};
     m[1].onAuthStateChanged(auth,function(u){
       $('login').hidden=!!u;$('logout').hidden=!u;
-      if(!u){CL=null;cstat('Sin sincronizar. Entra con Google para guardar en la nube.');return}
+      if(!u){CL=null;CX=null;cstat('Sin sincronizar. Entra con Google para guardar en la nube.');return}
       var ref=m[2].doc(db,'usuarios',u.uid);
       m[2].getDoc(ref).then(function(d){
         if(d.exists()&&d.data().datos){S=norm(JSON.parse(d.data().datos));try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}refreshAll()}
         CL=function(){m[2].setDoc(ref,{datos:JSON.stringify(S),actualizado:Date.now()}).then(function(){cstat('Sincronizado con '+(u.email||'tu cuenta'))}).catch(function(){cstat('Error al guardar en la nube.')})};
+        CX={
+          put:function(code,o){return m[2].setDoc(m[2].doc(db,'compartidos',code),{dueno:u.uid,nombre:o.name,datos:JSON.stringify(o),creado:Date.now()})},
+          get:function(code){return m[2].getDoc(m[2].doc(db,'compartidos',code)).then(function(d){return d.exists()?JSON.parse(d.data().datos):null})}
+        };
         CL();
       }).catch(function(){cstat('No se pudo leer tu información de la nube.')});
     });
